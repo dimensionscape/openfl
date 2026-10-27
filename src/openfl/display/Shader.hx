@@ -574,6 +574,8 @@ class Shader
 	{
 		var lastMatch = 0, position, regex, name, type;
 
+		source = __stripGLComments(source);
+
 		if (storageType == "uniform")
 		{
 			regex = ~/uniform ([A-Za-z0-9]+) ([A-Za-z0-9_]+)/;
@@ -728,6 +730,15 @@ class Shader
 			position = regex.matchedPos();
 			lastMatch = position.pos + position.len;
 		}
+	}
+
+	@:noCompletion private static function __stripGLComments(source:String):String
+	{
+		if (source == null) return null;
+
+		// Like the GLSL preprocessor, replace each comment with a space, so that words like
+		// "uniform" or "attribute" inside a comment are not parsed as declarations
+		return ~/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g.replace(source, " ");
 	}
 
 	@:noCompletion private function __update():Void

@@ -202,6 +202,8 @@ class ShaderMacro
 	{
 		if (source == null) return;
 
+		source = stripComments(source);
+
 		var lastMatch = 0, position, regex, field:Field, name, type;
 
 		if (storageType == "uniform")
@@ -322,6 +324,13 @@ class ShaderMacro
 			position = regex.matchedPos();
 			lastMatch = position.pos + position.len;
 		}
+	}
+
+	private static function stripComments(source:String):String
+	{
+		// Like the GLSL preprocessor, replace each comment with a space, so that words like
+		// "uniform" or "attribute" inside a comment are not parsed as declarations
+		return ~/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g.replace(source, " ");
 	}
 }
 #end
