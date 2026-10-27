@@ -477,6 +477,9 @@ import sys.io.Process;
 	**/
 	public static var version(get, never):String;
 
+	#if linux
+	@:noCompletion private static var __os:String;
+	#end
 	@:noCompletion private static var __standardDensities:Array<Int> = [120, 160, 240, 320, 480, 640, 800, 960];
 
 	#if openfljs
@@ -648,7 +651,7 @@ import sys.io.Process;
 		#end
 	}
 
-	@:noCompletion private static inline function get_os():String
+	@:noCompletion private static function get_os():String
 	{
 		#if lime
 		#if (ios || tvos)
@@ -656,17 +659,21 @@ import sys.io.Process;
 		#elseif mac
 		return "Mac OS " + System.platformVersion;
 		#elseif linux
-		var kernelVersion = "";
-		try
+		if (__os == null)
 		{
-			var process = new Process("uname", ["-r"]);
-			kernelVersion = StringTools.trim(process.stdout.readLine().toString());
-			process.close();
+			var kernelVersion = "";
+			try
+			{
+				var process = new Process("uname", ["-r"]);
+				kernelVersion = StringTools.trim(process.stdout.readAll().toString());
+				// wait for uname to exit, or it remains as a zombie process
+				process.exitCode();
+				process.close();
+			}
+			catch (e:Dynamic) {}
+			__os = (kernelVersion != "") ? "Linux " + kernelVersion : "Linux";
 		}
-		catch (e:Dynamic) {}
-		if (kernelVersion != "") return "Linux " + kernelVersion;
-		else
-			return "Linux";
+		return __os;
 		#else
 		var label = System.platformLabel;
 		return label != null ? label : "";
