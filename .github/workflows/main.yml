@@ -163,6 +163,8 @@ jobs:
         run: |
           haxelib dev openfl ${{ github.workspace }}
           haxelib dev lime ${{ github.workspace }}/lime-develop
+          haxelib install native-desktop 1.0.1 --quiet
+          haxelib install native-ipc 1.0.0 --quiet
 
       - name: Install HashLink dependencies with Homebrew
         run: |
