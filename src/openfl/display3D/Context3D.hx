@@ -259,7 +259,7 @@ import lime.math.Vector2;
 	@:noCompletion private static var __glMemoryTotalAvailable:Int = -1;
 	@:noCompletion private static var __glTextureMaxAnisotropy:Int = -1;
 
-	@:noCompletion private var gl:#if lime WebGLRenderContext #else Dynamic #end;
+	@:noCompletion @:isVar private var gl(get, null):#if lime WebGLRenderContext #else Dynamic #end;
 	@:noCompletion private var __backBufferPixelRatio:Float;
 	@:noCompletion private var __backBufferAntiAlias:Int;
 	@:noCompletion private var __backBufferTexture:RectangleTexture;
@@ -2680,6 +2680,18 @@ import lime.math.Vector2;
 
 			__present = true;
 		}
+	}
+
+	@:noCompletion private function get_gl():#if lime WebGLRenderContext #else Dynamic #end
+	{
+		#if (lime && (cpp || hl || neko))
+		// Used outside of its own window's render, its window's context is made current first
+		if (Stage.__contextStage != __stage && __stage != null)
+		{
+			__stage.__makeContextCurrent();
+		}
+		#end
+		return gl;
 	}
 
 	@:noCompletion private function __setGLBlend(enable:Bool):Void

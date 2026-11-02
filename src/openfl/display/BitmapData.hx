@@ -27,7 +27,6 @@ import openfl.Lib;
 import openfl.Vector;
 #if lime
 import lime._internal.graphics.ImageCanvasUtil; // TODO
-import lime.app.Application;
 import lime.graphics.cairo.CairoImageSurface;
 import lime.graphics.cairo.CairoSurface;
 import lime.graphics.cairo.Cairo;
@@ -126,6 +125,7 @@ import openfl.display._internal.stats.DrawCallContext;
 @:access(openfl.display.DisplayObjectShader)
 @:access(openfl.display.Graphics)
 @:access(openfl.display.Shader)
+@:access(openfl.display.Stage)
 @:access(openfl.filters.BitmapFilter)
 @:access(openfl.geom.ColorTransform)
 @:access(openfl.geom.Matrix)
@@ -955,10 +955,14 @@ class BitmapData implements IBitmapDrawable
 
 		if (!readable && Lib.current.stage.context3D != null)
 		{
+			// The texture is drawn with the context it was made in, which another window's
+			// render may have replaced as the current one
+			var context3D = __texture != null ? __texture.__context : Lib.current.stage.context3D;
+			var contextStage = context3D.__stage.__beginContext();
+
 			if (__textureContext == null)
 			{
-				// TODO: Some way to select current GL context for renderer?
-				__textureContext = Application.current.window.context;
+				__textureContext = context3D.__context;
 			}
 
 			if (colorTransform != null)
@@ -966,9 +970,9 @@ class BitmapData implements IBitmapDrawable
 				_colorTransform.__combine(colorTransform);
 			}
 
-			var renderer = new OpenGLRenderer(Lib.current.stage.context3D, this);
+			var renderer = new OpenGLRenderer(context3D, this);
 			renderer.__allowSmoothing = smoothing;
-			renderer.__pixelRatio = #if openfl_disable_hdpi 1 #else Lib.current.stage.window.scale #end;
+			renderer.__pixelRatio = #if openfl_disable_hdpi 1 #else context3D.__stage.window.scale #end;
 			renderer.__overrideBlendMode = blendMode;
 
 			renderer.__worldTransform = transform;
@@ -989,6 +993,9 @@ class BitmapData implements IBitmapDrawable
 				renderer.__popMaskRect();
 				Matrix.__pool.release(clipMatrix);
 			}
+
+			__dropOtherTextures();
+			Stage.__endContext(contextStage);
 		}
 		else
 		{
@@ -2259,6 +2266,17 @@ class BitmapData implements IBitmapDrawable
 	{
 		if (!__isValid) return null;
 
+		if (image == null
+			&& __texture != null
+			&& __textureContext != context.__context
+			&& __indexOfOtherTexture(context.__context) == -1)
+		{
+			// With no image left to upload, as once a bitmap that is not readable has
+			// uploaded it, the texture made for another window is drawn, which works as
+			// Lime shares textures between windows
+			return __texture;
+		}
+
 		if ((__texture == null || __textureContext != context.__context) && !__swapTexture(context.__context))
 		{
 			__textureContext = context.__context;
@@ -3214,13 +3232,11 @@ class BitmapData implements IBitmapDrawable
 			color = 0;
 		}
 
-		if (allowFramebuffer
-			&& __texture != null
-			&& __texture.__glFramebuffer != null
-			&& Lib.current.stage.__renderer.__type == OPENGL)
+		if (allowFramebuffer && __texture != null && __texture.__glFramebuffer != null)
 		{
-			var renderer:OpenGLRenderer = cast Lib.current.stage.__renderer;
-			var context = renderer.__context3D;
+			// The framebuffer belongs to the context the texture was made in
+			var context = __texture.__context;
+			var contextStage = context.__stage.__beginContext();
 			var color:ARGB = (color : ARGB);
 			var useScissor = !this.rect.equals(rect);
 
@@ -3265,6 +3281,9 @@ class BitmapData implements IBitmapDrawable
 			{
 				context.setRenderToBackBuffer();
 			}
+
+			__dropOtherTextures();
+			Stage.__endContext(contextStage);
 		}
 		else if (readable)
 		{
@@ -3459,23 +3478,35 @@ class BitmapData implements IBitmapDrawable
 		#end
 	}
 
-	@:noCompletion private function __swapTexture(context:#if lime RenderContext #else Dynamic #end):Bool
+	@:noCompletion private function __dropOtherTextures():Void
 	{
-		// A bitmap drawn in more than one window keeps a texture for each window's context,
-		// rather than making and uploading a new one each time it changes windows
-		var index = -1;
+		// Drawn on the GPU, only the current texture holds the bitmap now, and other
+		// windows draw it too once there is no image to upload
+		if (image == null)
+		{
+			__otherTextures = null;
+			__otherTextureVersions = null;
+		}
+	}
 
+	@:noCompletion private function __indexOfOtherTexture(context:#if lime RenderContext #else Dynamic #end):Int
+	{
 		if (__otherTextures != null)
 		{
 			for (i in 0...__otherTextures.length)
 			{
-				if (__otherTextures[i].__context.__context == context)
-				{
-					index = i;
-					break;
-				}
+				if (__otherTextures[i].__context.__context == context) return i;
 			}
 		}
+
+		return -1;
+	}
+
+	@:noCompletion private function __swapTexture(context:#if lime RenderContext #else Dynamic #end):Bool
+	{
+		// A bitmap drawn in more than one window keeps a texture for each window's context,
+		// rather than making and uploading a new one each time it changes windows
+		var index = __indexOfOtherTexture(context);
 
 		if (__texture != null)
 		{

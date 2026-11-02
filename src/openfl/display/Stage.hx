@@ -1021,6 +1021,7 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 	@:noCompletion private var __quality:StageQuality;
 	@:noCompletion private var __renderer:DisplayObjectRenderer;
 	@:noCompletion private var __rendering:Bool;
+	@:noCompletion private static var __contextStage:Stage;
 	@:noCompletion private var __rollOutStack:Array<DisplayObject>;
 	@:noCompletion private var __scaleMode:StageScaleMode;
 	@:noCompletion private var __stack:Array<DisplayObject>;
@@ -2337,10 +2338,12 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 	@:noCompletion private function __renderAfterEvent():Void
 	{
+		var contextStage = __contextStage;
 		#if (cpp || hl || neko)
 		// TODO: should Lime have a public API to force rendering?
 		window.__backend.render();
 		#end
+		__contextStage = context3D != null ? this : null;
 		var cancelled = __render(window.context);
 		#if (cpp || hl || neko)
 		if (!cancelled)
@@ -2348,6 +2351,38 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 			window.__backend.contextFlip();
 		}
 		#end
+		__endContext(contextStage);
+	}
+
+	// Each window has its own OpenGL context, and OpenFL tracks which one is current, or
+	// null when it cannot know, so that a Context3D used outside of its own window's
+	// render makes its context current first
+	@:noCompletion private function __makeContextCurrent():Void
+	{
+		#if (cpp || hl || neko)
+		if (window != null && window.__backend.handle != null)
+		{
+			window.__backend.render();
+		}
+		#end
+		__contextStage = this;
+	}
+
+	// Makes this stage's context current, returning the stage whose context was current,
+	// to make current again once done
+	@:noCompletion private function __beginContext():Stage
+	{
+		var contextStage = __contextStage;
+		if (contextStage != this) __makeContextCurrent();
+		return contextStage;
+	}
+
+	@:noCompletion private static function __endContext(contextStage:Stage):Void
+	{
+		if (contextStage != null && contextStage != __contextStage)
+		{
+			contextStage.__makeContextCurrent();
+		}
 	}
 
 	@:noCompletion private function __render(context:RenderContext):Bool
@@ -2388,6 +2423,12 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 		#end
 
 		#if lime
+		// Code run for this frame may have used another window's context
+		if (context3D != null && __contextStage != this)
+		{
+			__makeContextCurrent();
+		}
+
 		if (__renderer != null)
 		{
 			if (context3D != null)
@@ -2461,6 +2502,8 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 	{
 		if (__rendering) return;
 		__rendering = true;
+		// Lime made this window's context current to render it
+		__contextStage = context3D != null ? this : null;
 
 		#if hxtelemetry
 		Telemetry.__advanceFrame();
@@ -2507,6 +2550,8 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 			window.onRender.cancel();
 		}
 
+		// Lime makes the next window's context current, or the main window's
+		__contextStage = null;
 		__rendering = false;
 	}
 
@@ -2625,6 +2670,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 		if (this.window == window)
 		{
 			this.window = null;
+		}
+
+		if (__contextStage == this)
+		{
+			__contextStage = null;
 		}
 
 		__primaryTouch = null;
