@@ -456,7 +456,8 @@ class Shader
 			__data = cast new ShaderData(null);
 		}
 
-		if (__glFragmentSource != null && __glVertexSource != null && (program == null || __glSourceDirty))
+		// A program belongs to the context it was made in, and a shader may be drawn in each window
+		if (__glFragmentSource != null && __glVertexSource != null && (program == null || __glSourceDirty || program.__context != __context))
 		{
 			__initGL();
 		}
@@ -479,7 +480,7 @@ class Shader
 			__processGLData(glFragmentSource, "uniform");
 		}
 
-		if (__context != null && program == null)
+		if (__context != null && (program == null || program.__context != __context))
 		{
 			var gl = __context.gl;
 

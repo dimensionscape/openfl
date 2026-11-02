@@ -358,7 +358,8 @@ class OpenGLRenderer extends DisplayObjectRenderer
 	{
 		__currentShaderBuffer = null;
 
-		if (__currentShader == shader) return;
+		// The shader may have been drawn by another window's renderer since, with its context
+		if (__currentShader == shader && (shader == null || shader.__context == __context3D)) return;
 
 		if (__currentShader != null)
 		{
@@ -538,9 +539,8 @@ class OpenGLRenderer extends DisplayObjectRenderer
 	{
 		if (shader != null)
 		{
-			// TODO: Change of GL context?
-
-			if (shader.__context == null)
+			// A shader can be drawn by the renderer of each window, so it takes this one's context
+			if (shader.__context != __context3D)
 			{
 				shader.__context = __context3D;
 				shader.__init();
@@ -557,9 +557,8 @@ class OpenGLRenderer extends DisplayObjectRenderer
 	{
 		if (shader != null)
 		{
-			// TODO: Change of GL context?
-
-			if (shader.__context == null)
+			// A shader can be drawn by the renderer of each window, so it takes this one's context
+			if (shader.__context != __context3D)
 			{
 				shader.__context = __context3D;
 				shader.__init();
@@ -576,9 +575,8 @@ class OpenGLRenderer extends DisplayObjectRenderer
 	{
 		if (shader != null)
 		{
-			// TODO: Change of GL context?
-
-			if (shader.__context == null)
+			// A shader can be drawn by the renderer of each window, so it takes this one's context
+			if (shader.__context != __context3D)
 			{
 				shader.__context = __context3D;
 				shader.__init();
