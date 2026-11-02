@@ -64,10 +64,10 @@ import openfl.geom.Point;
 	constructor has been called and before `close()` has been called. It is the
 	responsibility of the application to close its own windows.
 
-	Important: In OpenFL 9.5.1+, only the main application window supports hardware 
-	acceleration (OpenGL). Additional NativeWindow instances are currently limited 
-	to software rendering (Cairo) to ensure stability. This limitation applies only 
-	to non-AIR targets.
+	On non-AIR targets, a window renders with OpenGL or with software (Cairo) as
+	its `renderMode` sets. By default, it renders as the main application window
+	does. With Lime before 8.4.0, whose windows do not share OpenGL objects,
+	additional windows always render with software.
 **/
 @:access(openfl.desktop.NativeApplication)
 @:access(openfl.display.NativeWindowInitOptions)
@@ -185,8 +185,9 @@ class NativeWindow extends EventDispatcher
 		window from being visible, do not change the window `visible` property
 		to `true` or call `activate()` until the window changes are finished.
 
-		Note: Only the main application window supports hardware acceleration; 
-		additional windows are currently limited to software rendering.
+		Note: On non-AIR targets, a `renderMode` of `"cpu"` renders the window
+		with software, `"direct"` or `"gpu"` with OpenGL, and `"auto"` or `null`
+		as the main application window renders.
 	**/
 	public function new(initOptions:NativeWindowInitOptions)
 	{
@@ -218,7 +219,7 @@ class NativeWindow extends EventDispatcher
 				borderless: __initOptions.systemChrome == NONE,
 				context:
 				{
-					hardware:false
+					hardware: __usesHardware(app)
 				},
 				width: #if (lime < "8.1.0") 0 #else 400 #end,
 				height: #if (lime < "8.1.0") 0 #else 228 #end
@@ -795,6 +796,26 @@ class NativeWindow extends EventDispatcher
 			throw new Error(ERROR_CLOSED, 3200);
 		}
 		return __initOptions.owner;
+	}
+
+	@:noCompletion private function __usesHardware(app:openfl.display.Application):Bool
+	{
+		#if (lime >= "8.4.0")
+		switch (__initOptions.renderMode)
+		{
+			case "cpu":
+				return false;
+			case "direct", "gpu":
+				return true;
+			default:
+				// As in AIR, a window renders as the main window does
+				var main = app.window;
+				return main != null && main.context != null && main.context.attributes.hardware;
+		}
+		#else
+		// Older Lime windows share no OpenGL objects, which OpenFL needs
+		return false;
+		#end
 	}
 
 	/**
