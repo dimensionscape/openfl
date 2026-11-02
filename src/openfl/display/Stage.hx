@@ -1339,6 +1339,24 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 	public function setOrientation(newOrientation:StageOrientation):Void {}
 
 	@SuppressWarnings("checkstyle:Dynamic")
+	@:noCompletion private function __broadcastsOffStage():Bool
+	{
+		#if lime
+		if (window != null && window.application != null)
+		{
+			for (window in window.application.windows)
+			{
+				#if lime_skip_invisible_windows
+				if (!window.visible) continue;
+				#end
+				if (window.context == null) continue;
+				return window == this.window;
+			}
+		}
+		#end
+		return true;
+	}
+
 	@:noCompletion private function __broadcastEvent(event:Event):Void
 	{
 		if (DisplayObject.__broadcastEvents.exists(event.type))
@@ -1347,10 +1365,8 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 			for (dispatcher in dispatchers)
 			{
-				// TODO: Way to resolve dispatching occurring if object not on stage
-				// and there are multiple stage objects running in HTML5?
-
-				if (dispatcher.stage == this || dispatcher.stage == null)
+				// An object on no stage gets the event once, from the first stage
+				if (dispatcher.stage == this || (dispatcher.stage == null && __broadcastsOffStage()))
 				{
 					if (__uncaughtErrorEvents.__enabled)
 					{
