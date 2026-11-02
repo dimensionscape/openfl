@@ -207,6 +207,8 @@ class BitmapData implements IBitmapDrawable
 	@:noCompletion private var __isMask:Bool;
 	@:noCompletion private var __isValid:Bool;
 	@:noCompletion private var __mask:DisplayObject;
+	@:noCompletion private var __otherTextures:Array<TextureBase>;
+	@:noCompletion private var __otherTextureVersions:Array<Int>;
 	@:noCompletion private var __renderable:Bool;
 	@:noCompletion private var __renderTransform:Matrix;
 	@:noCompletion private var __scrollRect:Rectangle;
@@ -786,6 +788,8 @@ class BitmapData implements IBitmapDrawable
 		__framebufferContext = null;
 		__texture = null;
 		__textureContext = null;
+		__otherTextures = null;
+		__otherTextureVersions = null;
 
 		// if (__texture != null) {
 		//
@@ -2255,7 +2259,7 @@ class BitmapData implements IBitmapDrawable
 	{
 		if (!__isValid) return null;
 
-		if (__texture == null || __textureContext != context.__context)
+		if ((__texture == null || __textureContext != context.__context) && !__swapTexture(context.__context))
 		{
 			__textureContext = context.__context;
 			__texture = context.createRectangleTexture(width, height, BGRA, false);
@@ -3453,6 +3457,49 @@ class BitmapData implements IBitmapDrawable
 		#if (js && html5)
 		ImageCanvasUtil.sync(image, false);
 		#end
+	}
+
+	@:noCompletion private function __swapTexture(context:#if lime RenderContext #else Dynamic #end):Bool
+	{
+		// A bitmap drawn in more than one window keeps a texture for each window's context,
+		// rather than making and uploading a new one each time it changes windows
+		var index = -1;
+
+		if (__otherTextures != null)
+		{
+			for (i in 0...__otherTextures.length)
+			{
+				if (__otherTextures[i].__context.__context == context)
+				{
+					index = i;
+					break;
+				}
+			}
+		}
+
+		if (__texture != null)
+		{
+			if (__otherTextures == null)
+			{
+				__otherTextures = [];
+				__otherTextureVersions = [];
+			}
+
+			__otherTextures.push(__texture);
+			__otherTextureVersions.push(__textureVersion);
+		}
+
+		if (index == -1)
+		{
+			return false;
+		}
+
+		__texture = __otherTextures[index];
+		__textureVersion = __otherTextureVersions[index];
+		__textureContext = context;
+		__otherTextures.splice(index, 1);
+		__otherTextureVersions.splice(index, 1);
+		return true;
 	}
 
 	@:noCompletion private function __update(transformOnly:Bool, updateChildren:Bool):Void
